@@ -1,143 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Customer Feedback Analyzer</title>
-    <!-- Bootstrap CSS CDN for attractive design -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f8f9fa; padding: 20px; }
-        .feedback-card { 
-            margin-bottom: 20px; 
-            transition: transform 0.2s;
-            height: 250px; /* Fixed height for each card */
-            overflow: hidden; /* Hide overflow within card */
-        }
-        .feedback-card:hover { transform: scale(1.02); }
-        .positive { border-left: 5px solid #28a745; } /* Green for rating 4-5 */
-        .neutral { border-left: 5px solid #ffc107; } /* Yellow for rating 3 */
-        .negative { border-left: 5px solid #dc3545; } /* Red for rating 1-2 */
-        #feedback-section { 
-            max-height: 500px; /* Fixed maximum height for scrolling */
-            overflow-y: auto; /* Enable vertical scrolling */
-            margin-bottom: 20px;
-        }
-        #insights { 
-            margin-top: 10px; 
-            padding: 20px; 
-            background-color: #ffffff; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-        }
-        .stars { color: #ffd700; } /* Gold color for stars */
-        .card-body { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
-            height: 100%; 
-        }
-        .card-text { 
-            flex-grow: 1; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-            display: -webkit-box; 
-            -webkit-line-clamp: 3; 
-            -webkit-box-orient: vertical; 
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Customer Feedback Analyzer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0d1117;
+      color: #e6edf3;
+      font-family: "Segoe UI", sans-serif;
+    }
+    .card {
+      background-color: #161b22;
+      border-radius: 12px;
+      color: #e6edf3;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .form-card {
+      max-width: 700px;
+      margin: 0 auto 2rem auto;
+    }
+
+    .feedback-card {
+      min-height: 140px;
+      transition: transform 0.3s ease;
+      margin-bottom: 1rem;
+    }
+    .feedback-card:hover {
+      transform: scale(1.03);
+    }
+    .positive { border-left: 5px solid #28a745; }
+    .neutral  { border-left: 5px solid #ffc107; }
+    .negative { border-left: 5px solid #dc3545; }
+
+    /* Vertical scrolling cards */
+    .feedback-carousel {
+      height: 400px; /* visible area */
+      overflow: hidden;
+      position: relative;
+    }
+    .feedback-track {
+      display: flex;
+      flex-direction: column;
+      animation: scrollY 18s linear infinite;
+    }
+    .feedback-track:hover {
+      animation-play-state: paused;
+    }
+    @keyframes scrollY {
+      0%   { transform: translateY(0); }
+      100% { transform: translateY(-50%); }
+    }
+
+    .stars { color: #ffd700; } /* gold stars */
+
+    .insight-card {
+      margin-bottom: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    .insight-praises { background: rgba(40,167,69,0.2); border: 1px solid #28a745; }
+    .insight-pains   { background: rgba(220,53,69,0.2); border: 1px solid #dc3545; }
+    .insight-rec     { background: rgba(0,123,255,0.2); border: 1px solid #007bff; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1 class="text-center mb-4">Customer Feedback Analyzer</h1>
-        
-        <!-- Feedback Submission Form -->
-        <div class="card mb-5 shadow">
-            <div class="card-body">
-                <h5 class="card-title">Submit Your Feedback</h5>
-                <form method="POST" action="/">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="feedback_text" class="form-label">Feedback Text</label>
-                        <textarea class="form-control" id="feedback_text" name="feedback_text" rows="3" required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="rating" class="form-label">Rating (Required, 1-5)</label>
-                        <select class="form-select" id="rating" name="rating" required>
-                            <option value="1">1 - Poor</option>
-                            <option value="2">2 - Fair</option>
-                            <option value="3">3 - Average</option>
-                            <option value="4">4 - Good</option>
-                            <option value="5">5 - Excellent</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Submit Feedback</button>
-                </form>
-            </div>
-        </div>
+  <div class="container py-4">
 
-        <!-- Two-column Layout -->
-        <div class="row mt-4">
-            
-            <!-- LEFT SIDE: Analyze Feedback -->
-            <div class="col-md-6">
-                <div class="text-center mb-4">
-                    <form method="POST" action="/analyze">
-                        <button type="submit" class="btn btn-success btn-lg w-100">Analyze Feedback</button>
-                    </form>
-                </div>
+    <!-- Title -->
+    <h1 class="text-center mb-4">Customer Feedback Analyzer</h1>
+    <p class="text-center text-secondary">Turn feedback into actionable insights with the power of AI.</p>
 
-                <!-- Insights Section -->
-                <div id="insights">
-                    {% if classifications and pain_summary and praise_summary and recommendation %}
-                        <h3>AI-Generated Insights</h3>
-                        <div id="insightsContent">
-                            <p><strong>Classifications:</strong> {{ classifications|join('; ') }}</p>
-                            <p><strong>Key Pain Points:</strong> {{ pain_summary }}</p>
-                            <p><strong>Key Praises:</strong> {{ praise_summary }}</p>
-                            <p><strong>Actionable Recommendation:</strong> {{ recommendation }}</p>
-                        </div>
-                    {% elif error %}
-                        <p style="color: red;">Error: {{ error }}</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- RIGHT SIDE: Submitted Feedback -->
-            <div class="col-md-6">
-                <div class="text-center mb-4">
-                    <form method="POST" action="/">
-                        <button type="submit" name="toggle_feedback" class="btn btn-info btn-lg w-100">Submitted Feedback</button>
-                    </form>
-                </div>
-                <div id="feedback-section" {% if not show_feedback %}style="display: none;"{% endif %}>
-                    <h3 class="mb-3">Submitted Feedback</h3>
-                    <div id="feedback-cards" class="row">
-                        {% for fb in feedbacks %}
-                            <div class="col-md-12 mb-3">
-                                <div class="card feedback-card shadow {% if fb['rating'] >= 4 %}positive{% elif fb['rating'] == 3 %}neutral{% elif fb['rating'] <= 2 %}negative{% endif %}">
-                                    <div class="card-body">
-                                        <h5 class="card-title">{{ fb['name'] }} (Rating: {{ fb['rating'] }}/5)</h5>
-                                        <p class="card-text">{{ fb['feedback_text'] }}</p>
-                                        <div class="stars">
-                                            {% for i in range(fb['rating']) %}★{% endfor %}
-                                            {% for i in range(5 - fb['rating']) %}☆{% endfor %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-        </div>
+    <!-- Feedback Form (Top Center) -->
+    <div class="card form-card shadow">
+      <div class="card-body">
+        <h5 class="card-title text-center">Submit Your Feedback</h5>
+        <form method="POST" action="/">
+          <div class="mb-3">
+            <label for="name" class="form-label">Your Name</label>
+            <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Jane Doe" required>
+          </div>
+          <div class="mb-3">
+            <label for="feedback_text" class="form-label">Feedback</label>
+            <textarea class="form-control" id="feedback_text" name="feedback_text" placeholder="What's on your mind?" rows="3" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="rating" class="form-label">Rating</label>
+            <select class="form-select" id="rating" name="rating" required>
+              <option value="1">★☆☆☆☆</option>
+              <option value="2">★★☆☆☆</option>
+              <option value="3">★★★☆☆</option>
+              <option value="4">★★★★☆</option>
+              <option value="5">★★★★★</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Submit Feedback</button>
+        </form>
+      </div>
     </div>
 
-    <!-- Bootstrap JS and Popper for styling only (no interactivity) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Two Column Layout -->
+    <div class="row">
+      
+      <!-- Submitted Feedback (left) -->
+      <div class="col-md-6 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5>Submitted Feedback</h5>
+          <form method="POST" action="/analyze">
+            <button type="submit" class="btn btn-info btn-sm">Analyze All</button>
+          </form>
+        </div>
+
+        <div class="feedback-carousel">
+          <div class="feedback-track">
+            {% for fb in feedbacks %}
+            <div class="card feedback-card shadow 
+              {% if fb['rating'] >= 4 %}positive{% 
+                 elif fb['rating'] == 3 %}neutral{% 
+                 else %}negative{% endif %}">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="card-title">{{ fb['name'] }}</h6>
+                  <!-- Classification Badge -->
+                  {% if fb['rating'] >= 4 %}
+                    <span class="badge bg-success">Positive</span>
+                  {% elif fb['rating'] == 3 %}
+                    <span class="badge bg-warning text-dark">Neutral</span>
+                  {% else %}
+                    <span class="badge bg-danger">Negative</span>
+                  {% endif %}
+                </div>
+                <p class="card-text mt-2">{{ fb['feedback_text'] }}</p>
+                <div class="stars">
+                  {% for i in range(fb['rating']) %}★{% endfor %}
+                  {% for i in range(5 - fb['rating']) %}☆{% endfor %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Insights (right) -->
+      <div class="col-md-6 mb-4">
+        <h5>AI-Generated Insights</h5>
+        {% if classifications and pain_summary and praise_summary and recommendation %}
+          <div class="insight-card insight-praises">
+            <h6>Key Praises</h6>
+            <p>{{ praise_summary }}</p>
+          </div>
+          <div class="insight-card insight-pains">
+            <h6>Key Pain Points</h6>
+            <p>{{ pain_summary }}</p>
+          </div>
+          <div class="insight-card insight-rec">
+            <h6>Actionable Recommendation</h6>
+            <p>{{ recommendation }}</p>
+          </div>
+        {% elif error %}
+          <p class="text-danger">Error: {{ error }}</p>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
