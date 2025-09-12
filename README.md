@@ -62,7 +62,7 @@ python app.py
 
 ## 📂 Project Structure
 ```bash
-customer-feedback-analyzer/
+Customer_Feedback_Analyzer/
 │
 ├── app.py              # Flask backend (routes, DB, APIs)
 ├── llm_models.py       # Hugging Face sentiment/summarization models
