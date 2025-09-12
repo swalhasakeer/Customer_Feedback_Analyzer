@@ -54,20 +54,16 @@ def summarize_praises(praises):
     else:
         return "None"
 
-def generate_recommendation(pain_summary, praise_summary):
+def generate_recommendation(all_text):
     if summarizer:
-        prompt = f"Based on the following summaries:\n- Key Pain Points: {pain_summary}\n- Key Praises: {praise_summary}\nProvide a detailed actionable recommendation in bullet points, separated into two sections: 'For the Product Team' and 'For the Service Team'. Exclude any raw feedback or ratings, and focus on specific improvements and strengths to leverage."
-        result = summarizer(prompt, max_length=200, min_length=50, do_sample=False)[0]['summary_text']
-        lines = result.split('\n')
-        cleaned_lines = [line.strip() for line in lines if line.strip()]
-        formatted_lines = []
-        current_section = None
-        for line in cleaned_lines:
-            if line.startswith('For the Product Team') or line.startswith('For the Service Team'):
-                current_section = line
-                formatted_lines.append(f"<strong>{current_section}:</strong>")
-            elif line and current_section:
-                formatted_lines.append(f"- {line}" if not line.startswith('-') else line)
-        return '\n'.join(formatted_lines) if formatted_lines else "No specific recommendations available."
+        prompt = (
+            "You are an expert product consultant. "
+            "Summarize all the feedback below and provide ONE clear, concise, and actionable recommendation. "
+            "Do not repeat individual feedback texts or names. "
+            "Focus on the biggest improvement opportunity. "
+            f"\n\nFeedback:\n{all_text}\n\n"
+            "Final Recommendation:"
+        )
+        return summarizer(prompt, max_length=60, min_length=20, do_sample=False)[0]['summary_text']
     else:
         return "Unable to generate recommendation due to model failure."

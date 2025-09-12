@@ -121,8 +121,8 @@ def analyze_feedback():
         pain_summary = summarize_pain_points(pain_points)
         praise_summary = summarize_praises(praises)
 
-        # Generate recommendation based on summaries
-        recommendation = generate_recommendation(pain_summary, praise_summary)
+        # Generate recommendation
+        recommendation = generate_recommendation(all_text)
 
         return render_template('index.html', feedbacks=feedbacks, classifications=classifications, pain_summary=pain_summary, praise_summary=praise_summary, recommendation=recommendation, show_feedback=True)
     except sqlite3.Error as e:
