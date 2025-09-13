@@ -21,7 +21,6 @@
       max-width: 700px;
       margin: 0 auto 2rem auto;
     }
-
     .feedback-card {
       min-height: 140px;
       transition: transform 0.3s ease;
@@ -32,8 +31,8 @@
     }
     .positive { border-left: 5px solid #28a745; }
     .neutral  { border-left: 5px solid #ffc107; }
+    .mixed   { border-left: 5px solid #ffca2c; }
     .negative { border-left: 5px solid #dc3545; }
-
     /* Vertical scrolling cards */
     .feedback-carousel {
       height: 400px; /* visible area */
@@ -52,9 +51,7 @@
       0%   { transform: translateY(0); }
       100% { transform: translateY(-50%); }
     }
-
     .stars { color: #ffd700; } /* gold stars */
-
     .insight-card {
       margin-bottom: 1rem;
       padding: 1rem;
@@ -67,7 +64,6 @@
 </head>
 <body>
   <div class="container py-4">
-
     <!-- Title -->
     <h1 class="text-center mb-4">Customer Feedback Analyzer</h1>
     <p class="text-center text-secondary">Turn feedback into actionable insights with the power of AI.</p>
@@ -102,7 +98,6 @@
 
     <!-- Two Column Layout -->
     <div class="row">
-      
       <!-- Submitted Feedback (left) -->
       <div class="col-md-6 mb-4">
         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -111,24 +106,45 @@
             <button type="submit" class="btn btn-info btn-sm">Analyze All</button>
           </form>
         </div>
-
+        {% if feedbacks %}
         <div class="feedback-carousel">
           <div class="feedback-track">
             {% for fb in feedbacks %}
             <div class="card feedback-card shadow 
-              {% if fb['rating'] >= 4 %}positive{% 
-                 elif fb['rating'] == 3 %}neutral{% 
-                 else %}negative{% endif %}">
+              {% if classifications and classifications[loop.index0] %}
+                {% if classifications[loop.index0].split(': ')[1] == 'Positive' %}positive
+                {% elif classifications[loop.index0].split(': ')[1] == 'Negative' %}negative
+                {% elif classifications[loop.index0].split(': ')[1] == 'Mixed' %}mixed
+                {% else %}neutral
+                {% endif %}
+              {% else %}
+                {% if fb['rating'] >= 4 %}positive
+                {% elif fb['rating'] == 3 %}neutral
+                {% else %}negative
+                {% endif %}
+              {% endif %}">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                   <h6 class="card-title">{{ fb['name'] }}</h6>
                   <!-- Classification Badge -->
-                  {% if fb['rating'] >= 4 %}
-                    <span class="badge bg-success">Positive</span>
-                  {% elif fb['rating'] == 3 %}
-                    <span class="badge bg-warning text-dark">Neutral</span>
+                  {% if classifications and classifications[loop.index0] %}
+                    {% if classifications[loop.index0].split(': ')[1] == 'Positive' %}
+                      <span class="badge bg-success">Positive</span>
+                    {% elif classifications[loop.index0].split(': ')[1] == 'Negative' %}
+                      <span class="badge bg-danger">Negative</span>
+                    {% elif classifications[loop.index0].split(': ')[1] == 'Mixed' %}
+                      <span class="badge bg-warning text-dark">Mixed</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">Neutral</span>
+                    {% endif %}
                   {% else %}
-                    <span class="badge bg-danger">Negative</span>
+                    {% if fb['rating'] >= 4 %}
+                      <span class="badge bg-success">Positive</span>
+                    {% elif fb['rating'] == 3 %}
+                      <span class="badge bg-warning text-dark">Neutral</span>
+                    {% else %}
+                      <span class="badge bg-danger">Negative</span>
+                    {% endif %}
                   {% endif %}
                 </div>
                 <p class="card-text mt-2">{{ fb['feedback_text'] }}</p>
@@ -141,12 +157,15 @@
             {% endfor %}
           </div>
         </div>
+        {% else %}
+        <p class="text-secondary">No feedback submitted yet.</p>
+        {% endif %}
       </div>
 
       <!-- AI Insights (right) -->
       <div class="col-md-6 mb-4">
         <h5>AI-Generated Insights</h5>
-        {% if classifications and pain_summary and praise_summary and recommendation %}
+        {% if show_feedback and classifications and pain_summary and praise_summary and recommendation %}
           <div class="insight-card insight-praises">
             <h6>Key Praises</h6>
             <p>{{ praise_summary }}</p>
@@ -161,9 +180,10 @@
           </div>
         {% elif error %}
           <p class="text-danger">Error: {{ error }}</p>
+        {% else %}
+          <p class="text-secondary">Submit feedback and click "Analyze All" to see insights.</p>
         {% endif %}
       </div>
-
     </div>
   </div>
 
