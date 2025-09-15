@@ -3,11 +3,15 @@ from transformers import pipeline
 import logging
 import re
 
+# ---------------------------
 # Logging Setup
+# ---------------------------
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# ---------------------------
 # Load Hugging Face Models
+# ---------------------------
 try:
     sentiment_classifier = pipeline(
         "sentiment-analysis",
@@ -26,104 +30,150 @@ except Exception as e:
     logger.error(f"❌ Failed to load LLM models: {str(e)}")
     sentiment_classifier, summarizer, generator = None, None, None
 
+# ---------------------------
+# Keywords for filtering
+# ---------------------------
+NEGATIVE_KEYWORDS = [
+    'slow', 'overpriced', 'issue', 'problem', 'bug', 'crash',
+    'expensive', 'difficult', 'limited', 'ads', 'doesn’t',
+    'lack', 'not unique'
+]
+
+POSITIVE_KEYWORDS = [
+    'useful', 'great', 'excellent', 'clean', 'fast',
+    'intuitive', 'helpful', 'responsive'
+]
+
+# ---------------------------
 # Sentiment Classification
+# ---------------------------
 def classify_sentiment(text, rating):
     """
-    Classify sentiment using BERT model and refine with keyword analysis for mixed feedback.
-    Falls back to rating if model fails.
+    Classify sentiment based on rating + negative keyword detection.
     """
-    if sentiment_classifier:
-        try:
-            sentiment_result = sentiment_classifier(text[:512])[0]  # truncate long text
-            logger.debug(f"Feedback: {text}, Sentiment raw: {sentiment_result}, Rating: {rating}")
+    text_lower = text.lower()
+    has_negative = any(kw in text_lower for kw in NEGATIVE_KEYWORDS)
 
-            # Extract numeric stars (e.g., '3 stars' -> 3)
-            label = sentiment_result["label"]
-            match = re.search(r"\d+", label)
-            sentiment_value = int(match.group()) if match else 3
+    # Mixed: high rating but contains negatives
+    if rating in [4, 5] and has_negative:
+        return "Mixed"
 
-            # Check for negative keywords to detect mixed feedback
-            negative_keywords = ['slow', 'overpriced', 'issue', 'problem', 'bug', 'crash', 'expensive', 'difficult']
-            has_negative = any(keyword in text.lower() for keyword in negative_keywords)
-            has_positive = sentiment_value >= 4 or rating >= 4
-
-            if has_negative and has_positive:
-                return "Mixed"
-            elif sentiment_value >= 4:
-                return "Positive"
-            elif sentiment_value == 3:
-                return "Neutral"
-            else:
-                return "Negative"
-        except Exception as e:
-            logger.error(f"Sentiment classification error: {e}")
-
-    # Fallback: use numeric rating
-    if rating >= 4:
-        return "Positive"
+    if rating in [1, 2]:
+        return "Negative"
     elif rating == 3:
         return "Neutral"
     else:
-        return "Negative"
+        return "Positive"
 
-# Summarization of Pain Points
-def summarize_pain_points(pain_points):
-    if summarizer and pain_points:
-        try:
-            text = "Summarize key pain points: " + " ".join(pain_points)
-            result = summarizer(text, max_length=100, min_length=30, do_sample=False)
-            return result[0]["summary_text"].strip()
-        except Exception as e:
-            logger.error(f"Summarizer error (pain points): {e}")
-            return "None"
-    return "None"
+# ---------------------------
+# Helper: Sentence Filtering
+# ---------------------------
+def filter_positive_sentences(feedback_list):
+    positive_sentences = []
+    for text in feedback_list:
+        sentences = re.split(r'[.!?]', text)
+        for s in sentences:
+            s_clean = s.strip()
+            if s_clean and not any(kw in s_clean.lower() for kw in NEGATIVE_KEYWORDS):
+                positive_sentences.append(s_clean)
+    return positive_sentences
 
-# Summarization of Praises
-def summarize_praises(praises):
-    if summarizer and praises:
+def filter_negative_sentences(feedback_list):
+    negative_sentences = []
+    for text in feedback_list:
+        sentences = re.split(r'[.!?]', text)
+        for s in sentences:
+            s_clean = s.strip()
+            if s_clean and any(kw in s_clean.lower() for kw in NEGATIVE_KEYWORDS):
+                negative_sentences.append(s_clean)
+    return negative_sentences
+
+# ---------------------------
+# Summarization Functions
+# ---------------------------
+def summarize_praises(feedback_list):
+    positive_sentences = filter_positive_sentences(feedback_list)
+    if not positive_sentences:
+        return "No major praises detected."
+
+    text_to_summarize = " ".join(positive_sentences)
+    if summarizer:
         try:
-            text = "Summarize key praises: " + " ".join(praises)
-            result = summarizer(text, max_length=100, min_length=30, do_sample=False)
+            result = summarizer(
+                text_to_summarize,
+                max_length=80,
+                min_length=20,
+                do_sample=False
+            )
             return result[0]["summary_text"].strip()
         except Exception as e:
             logger.error(f"Summarizer error (praises): {e}")
-            return "None"
-    return "None"
+            return text_to_summarize
+    return text_to_summarize
 
-# Actionable Recommendation
-def generate_recommendation(all_text, classifications):
-    if generator:
-        # Clean feedback (remove names/ratings)
-        feedback_only = " ".join(
-            [line.split(":", 1)[-1].strip() for line in all_text.splitlines() if ":" in line]
-        )
+def summarize_pain_points(feedback_list):
+    negative_sentences = filter_negative_sentences(feedback_list)
+    if not negative_sentences:
+        return "No major pain points detected."
 
-        # Check if all feedback is positive
-        is_all_positive = all("Positive" in classification for classification in classifications)
-
-        # If all feedback is positive, return fixed response
-        if is_all_positive:
-            return "All feedback is positive; no action needed, customers are satisfied now."
-
-        # Improved prompt for mixed or negative feedback
-        prompt = (
-            "You are a senior product strategy consultant. "
-            "Analyze the following customer feedback and provide a short recommendation.\n\n"
-            "Rules:\n"
-            "1. Feedback contains mixed or negative sentiments, so suggest the single biggest improvement.\n"
-            "2. Focus on addressing negative aspects (e.g., performance issues, pricing concerns).\n"
-            "3. Do not repeat customer sentences or names.\n"
-            "4. Keep the answer to ONE sentence only.\n\n"
-            f"Customer Feedback:\n{feedback_only}\n\n"
-            "Final Recommendation:"
-        )
-
+    text_to_summarize = " ".join(negative_sentences)
+    if summarizer:
         try:
-            result = generator(prompt, max_length=50, min_length=10, do_sample=False)
-            recommendation = result[0]['generated_text'].strip()
+            result = summarizer(
+                text_to_summarize,
+                max_length=80,
+                min_length=20,
+                do_sample=False
+            )
+            return result[0]["summary_text"].strip()
+        except Exception as e:
+            logger.error(f"Summarizer error (pains): {e}")
+            return text_to_summarize
+    return text_to_summarize
+
+# ---------------------------
+# Actionable Recommendation
+# ---------------------------
+def generate_recommendation(all_text, classifications):
+    """
+    Generate ONE clear recommendation for the product/service team.
+    """
+    if not classifications:
+        return "No feedback available to generate recommendations."
+
+    if all("Positive" in c for c in classifications):
+        return "All feedback is positive; the team should maintain their current approach."
+
+    prompt = (
+        "You are a senior consultant advising a PRODUCT and SERVICE team.\n"
+        "Analyze the following customer feedback and provide ONE ACTIONABLE RECOMMENDATION.\n\n"
+        "Rules:\n"
+        "- Write directly to the team (e.g., 'The team should ...').\n"
+        "- Do NOT repeat or paraphrase customer sentences.\n"
+        "- Focus on the BIGGEST improvement opportunity.\n"
+        "- Keep it short (1–2 sentences).\n\n"
+        f"Customer Feedback:\n{all_text}\n\n"
+        "Final Recommendation for the team:"
+    )
+
+    if generator:
+        try:
+            result = generator(
+                prompt,
+                max_length=60,
+                min_length=15,
+                do_sample=False
+            )
+            recommendation = result[0]["generated_text"].strip()
+
+            # Safety filter to avoid echoing customer text
+            banned_words = ["I ", "me ", "my ", "the app", "the service", "the design"]
+            if any(word.lower() in recommendation.lower() for word in banned_words):
+                return "The team should enhance stability, performance, and affordability to improve user trust and satisfaction."
+
             return recommendation
         except Exception as e:
             logger.error(f"Recommendation generation error: {e}")
-            return "Recommendation generation failed."
-
-    return "Recommender model not available."
+            return "The team should prioritize fixing technical issues and improving performance."
+    else:
+        return "Recommendation generation failed."

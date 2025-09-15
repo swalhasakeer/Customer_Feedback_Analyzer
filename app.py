@@ -1,170 +1,261 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask_restful import Api, Resource, reqparse
 import sqlite3
-import json
-import torch
 import logging
-from llm_models import classify_sentiment, summarize_pain_points, summarize_praises, generate_recommendation
+import re
 import os
+from llm_models import (
+    classify_sentiment,
+    summarize_pain_points,
+    summarize_praises,
+    generate_recommendation,
+    NEGATIVE_KEYWORDS,
+    POSITIVE_KEYWORDS,
+)
 
 app = Flask(__name__)
+api = Api(app)
 
-# Set up logging
+# ---------------------------
+# Logging
+# ---------------------------
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Database configuration with absolute path
-DATABASE = os.path.join(os.path.dirname(__file__), 'feedback.db')
+# ---------------------------
+# Database setup
+# ---------------------------
+DATABASE = os.path.join(os.path.dirname(__file__), "feedback.db")
 
-# Initialize database
+
 def init_db():
-    try:
-        with sqlite3.connect(DATABASE) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS feedback (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    feedback_text TEXT NOT NULL,
-                    rating INTEGER NOT NULL,
-                    CHECK(rating BETWEEN 1 AND 5)
-                )
-            ''')
-            conn.commit()
-            logger.info("Database initialized successfully")
-    except sqlite3.Error as e:
-        logger.error(f"Failed to initialize database: {str(e)}")
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            feedback_text TEXT NOT NULL,
+            rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5)
+        )
+    """
+    )
+    conn.commit()
+    conn.close()
 
-# Helper function to get a database connection
+
 def get_db():
     conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # Allows accessing columns by name
+    conn.row_factory = sqlite3.Row
     return conn
 
-# Initialize database on app start
+
 init_db()
 
-# Helper function to generate default classifications based on rating
+# ---------------------------
+# Helper
+# ---------------------------
 def get_default_classifications(feedbacks):
     classifications = []
     for fb in feedbacks:
-        rating = fb['rating']
-        sentiment = 'Positive' if rating >= 4 else 'Neutral' if rating == 3 else 'Negative'
+        sentiment = classify_sentiment(fb["feedback_text"], fb["rating"])
         classifications.append(f"{fb['name']}: {sentiment}")
     return classifications
 
-# Homepage route: Display form and feedback cards
-@app.route('/', methods=['GET', 'POST'])
+
+# ---------------------------
+# Frontend Routes
+# ---------------------------
+@app.route("/", methods=["GET", "POST"])
 def index():
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC')
-            feedbacks = cursor.fetchall()
+    success_message = None
 
-            # Generate default classifications for initial display
-            classifications = get_default_classifications(feedbacks)
+    with get_db() as conn:
+        cursor = conn.cursor()
 
-            # Handle feedback submission
-            if request.method == 'POST' and 'name' in request.form:
-                name = request.form['name'].strip()
-                feedback_text = request.form['feedback_text'].strip()
-                rating = request.form.get('rating')
+        if request.method == "POST" and "name" in request.form:
+            name = request.form["name"].strip()
+            feedback_text = request.form["feedback_text"].strip()
+            rating = request.form.get("rating")
 
-                if not name or not feedback_text:
-                    logger.error("Submission failed: Name and feedback text are required")
-                    return render_template('index.html', feedbacks=feedbacks, classifications=classifications, error='Name and feedback text are required', show_feedback=False)
-                if not rating or not rating.isdigit():
-                    logger.error("Submission failed: Rating is required and must be a number")
-                    return render_template('index.html', feedbacks=feedbacks, classifications=classifications, error='Rating is required and must be a number', show_feedback=False)
-                rating = int(rating)
-                if rating < 1 or rating > 5:
-                    logger.error("Submission failed: Rating must be between 1 and 5")
-                    return render_template('index.html', feedbacks=feedbacks, classifications=classifications, error='Rating must be between 1 and 5', show_feedback=False)
+            if not (name and feedback_text and rating and rating.isdigit()):
+                cursor.execute(
+                    "SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC"
+                )
+                feedbacks = cursor.fetchall()
+                classifications = get_default_classifications(feedbacks)
+                return render_template(
+                    "index.html",
+                    feedbacks=feedbacks,
+                    classifications=classifications,
+                    error="⚠️ All fields are required",
+                    show_feedback=False,
+                )
 
-                try:
-                    cursor.execute('INSERT INTO feedback (name, feedback_text, rating) VALUES (?, ?, ?)',
-                                  (name, feedback_text, rating))
-                    conn.commit()
-                    logger.info(f"Feedback inserted: {name}, {feedback_text}, {rating}")
-                    cursor.execute('SELECT * FROM feedback WHERE id = last_insert_rowid()')
-                    verify = cursor.fetchone()
-                    if verify:
-                        logger.info(f"Verified insertion: {verify['name']}, {verify['feedback_text']}, {verify['rating']}")
-                    else:
-                        logger.error("Verification failed: No data inserted")
-                except sqlite3.Error as e:
-                    logger.error(f"Failed to insert feedback: {str(e)}")
-                    return render_template('index.html', feedbacks=feedbacks, classifications=classifications, error=f"Failed to save feedback: {str(e)}", show_feedback=False)
+            rating = int(rating)
+            if rating < 1 or rating > 5:
+                cursor.execute(
+                    "SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC"
+                )
+                feedbacks = cursor.fetchall()
+                classifications = get_default_classifications(feedbacks)
+                return render_template(
+                    "index.html",
+                    feedbacks=feedbacks,
+                    classifications=classifications,
+                    error="⚠️ Rating must be between 1 and 5",
+                    show_feedback=False,
+                )
 
-                return redirect(url_for('index'))
+            # Insert feedback
+            cursor.execute(
+                "INSERT INTO feedback (name, feedback_text, rating) VALUES (?, ?, ?)",
+                (name, feedback_text, rating),
+            )
+            conn.commit()
+            success_message = "✅ Submitted successfully!"
 
-            return render_template('index.html', feedbacks=feedbacks, classifications=classifications, show_feedback=False)
-    except sqlite3.Error as e:
-        logger.error(f"Database error in index: {str(e)}")
-        return render_template('index.html', feedbacks=[], classifications=[], error=f"Database error: {str(e)}", show_feedback=False)
-    except Exception as e:
-        logger.error(f"Unexpected error in index: {str(e)}")
-        return render_template('index.html', feedbacks=[], classifications=[], error=f"Unexpected error: {str(e)}", show_feedback=False)
+        cursor.execute(
+            "SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC"
+        )
+        feedbacks = cursor.fetchall()
+        classifications = get_default_classifications(feedbacks)
 
-# Analyze feedback route
-@app.route('/analyze', methods=['POST'])
+    return render_template(
+        "index.html",
+        feedbacks=feedbacks,
+        classifications=classifications,
+        success_message=success_message,
+        show_feedback=False,
+    )
+
+
+@app.route("/analyze", methods=["POST"])
 def analyze_feedback():
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT name, feedback_text, rating FROM feedback')
-            feedbacks = cursor.fetchall()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, feedback_text, rating FROM feedback")
+        feedbacks = cursor.fetchall()
 
-        classifications = []
-        pain_points = []
-        praises = []
-        mixed_feedbacks = []
-        all_text = ""
+    all_text = ""
+    praises_list, pains_list = [], []
+    classifications = []
+
+    for fb in feedbacks:
+        name, text, rating = fb["name"], fb["feedback_text"], fb["rating"]
+        classification = classify_sentiment(text, rating)
+        classifications.append(f"{name}: {classification}")
+
+        all_text += f"{name}: {text} (Rating: {rating})\n"
+
+        # Split sentences and assign to praise or pain
+        sentences = re.split(r"[.!?]", text)
+        for s in sentences:
+            s_clean = s.strip()
+            if not s_clean:
+                continue
+            if any(kw in s_clean.lower() for kw in NEGATIVE_KEYWORDS):
+                pains_list.append(s_clean)
+            elif any(kw in s_clean.lower() for kw in POSITIVE_KEYWORDS):
+                praises_list.append(s_clean)
+
+    pain_summary = summarize_pain_points(pains_list)
+    praise_summary = summarize_praises(praises_list)
+    recommendation = generate_recommendation(all_text, classifications)
+
+    return render_template(
+        "index.html",
+        feedbacks=feedbacks,
+        classifications=classifications,
+        pain_summary=pain_summary,
+        praise_summary=praise_summary,
+        recommendation=recommendation,
+        show_feedback=True,
+    )
+
+
+# ---------------------------
+# API (Flask-RESTful)
+# ---------------------------
+feedback_parser = reqparse.RequestParser()
+feedback_parser.add_argument("name", type=str, required=True, help="Name is required")
+feedback_parser.add_argument(
+    "feedback_text", type=str, required=True, help="Feedback is required"
+)
+feedback_parser.add_argument(
+    "rating", type=int, required=True, help="Rating is required (1–5)"
+)
+
+
+class FeedbackList(Resource):
+    def get(self):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "feedback_text": r["feedback_text"],
+                "rating": r["rating"],
+            }
+            for r in rows
+        ]
+
+    def post(self):
+        args = feedback_parser.parse_args()
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO feedback (name, feedback_text, rating) VALUES (?, ?, ?)",
+            (args["name"], args["feedback_text"], args["rating"]),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Feedback added"}, 201
+
+
+class Analyze(Resource):
+    def post(self):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, feedback_text, rating FROM feedback")
+        rows = cursor.fetchall()
+        conn.close()
+
+        feedbacks = [
+            {"name": r["name"], "feedback_text": r["feedback_text"], "rating": r["rating"]}
+            for r in rows
+        ]
+        classifications, all_text = [], ""
 
         for fb in feedbacks:
-            name = fb['name']
-            text = fb['feedback_text']
-            rating = fb['rating']
-            classification = classify_sentiment(text, rating)
-            classifications.append(f"{name}: {classification}")
-            if classification == 'Positive':
-                praises.append(text)
-            elif classification == 'Negative':
-                pain_points.append(text)
-            elif classification == 'Mixed':
-                mixed_feedbacks.append(text)
-            all_text += f"{name}: {text} (Rating: {rating})\n"
+            classification = classify_sentiment(fb["feedback_text"], fb["rating"])
+            classifications.append(f"{fb['name']}: {classification}")
+            all_text += f"{fb['name']}: {fb['feedback_text']} (Rating: {fb['rating']})\n"
 
-        # Summarize pain points, praises, and mixed feedback
-        pain_summary = summarize_pain_points(pain_points + mixed_feedbacks)
-        praise_summary = summarize_praises(praises + mixed_feedbacks)
-
-        # Generate recommendation, passing classifications to guide logic
+        pain_summary = summarize_pain_points(
+            [f["feedback_text"] for f in feedbacks if classify_sentiment(f["feedback_text"], f["rating"]) == "Negative"]
+        )
+        praise_summary = summarize_praises(
+            [f["feedback_text"] for f in feedbacks if classify_sentiment(f["feedback_text"], f["rating"]) == "Positive"]
+        )
         recommendation = generate_recommendation(all_text, classifications)
 
-        return render_template('index.html', feedbacks=feedbacks, classifications=classifications,
-                               pain_summary=pain_summary, praise_summary=praise_summary,
-                               recommendation=recommendation, show_feedback=True)
-    except sqlite3.Error as e:
-        logger.error(f"Database error in analyze_feedback: {str(e)}")
-        return render_template('index.html', feedbacks=[], classifications=[], error=f"Database error: {str(e)}", show_feedback=False)
-    except Exception as e:
-        logger.error(f"Error in analyze_feedback: {str(e)}")
-        return render_template('index.html', feedbacks=[], classifications=[], error=f"Analysis failed: {str(e)}", show_feedback=False)
+        return {
+            "success": True,
+            "classifications": classifications,
+            "pain_summary": pain_summary,
+            "praise_summary": praise_summary,
+            "recommendation": recommendation,
+        }
 
-# API: GET /feedback - Fetch all feedback
-@app.route('/feedback', methods=['GET'])
-def get_feedback():
-    try:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, name, feedback_text, rating FROM feedback ORDER BY id DESC')
-            feedbacks = cursor.fetchall()
-        feedback_list = [{'id': fb['id'], 'name': fb['name'], 'feedback_text': fb['feedback_text'], 'rating': fb['rating']} for fb in feedbacks]
-        return jsonify({'success': True, 'feedbacks': feedback_list})
-    except sqlite3.Error as e:
-        logger.error(f"Database error in get_feedback: {str(e)}")
-        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
 
-if __name__ == '__main__':
+api.add_resource(FeedbackList, "/api/feedback")
+api.add_resource(Analyze, "/api/analyze")
+
+if __name__ == "__main__":
     app.run(debug=True)

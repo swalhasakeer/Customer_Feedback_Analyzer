@@ -31,9 +31,10 @@
     }
     .positive { border-left: 5px solid #28a745; }
     .neutral  { border-left: 5px solid #ffc107; }
-    .mixed   { border-left: 5px solid #ffca2c; }
+    .mixed    { border-left: 5px solid #ffca2c; }
     .negative { border-left: 5px solid #dc3545; }
-    /* Vertical scrolling cards */
+
+    /* Vertical auto-scroll */
     .feedback-carousel {
       height: 400px; /* visible area */
       overflow: hidden;
@@ -42,7 +43,7 @@
     .feedback-track {
       display: flex;
       flex-direction: column;
-      animation: scrollY 18s linear infinite;
+      animation: scrollY 20s linear infinite;
     }
     .feedback-track:hover {
       animation-play-state: paused;
@@ -51,6 +52,7 @@
       0%   { transform: translateY(0); }
       100% { transform: translateY(-50%); }
     }
+
     .stars { color: #ffd700; } /* gold stars */
     .insight-card {
       margin-bottom: 1rem;
@@ -68,37 +70,44 @@
     <h1 class="text-center mb-4">Customer Feedback Analyzer</h1>
     <p class="text-center text-secondary">Turn feedback into actionable insights with the power of AI.</p>
 
-    <!-- Feedback Form (Top Center) -->
-    <div class="card form-card shadow">
-      <div class="card-body">
-        <h5 class="card-title text-center">Submit Your Feedback</h5>
-        <form method="POST" action="/">
-          <div class="mb-3">
-            <label for="name" class="form-label">Your Name</label>
-            <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Jane Doe" required>
-          </div>
-          <div class="mb-3">
-            <label for="feedback_text" class="form-label">Feedback</label>
-            <textarea class="form-control" id="feedback_text" name="feedback_text" placeholder="What's on your mind?" rows="3" required></textarea>
-          </div>
-          <div class="mb-3">
-            <label for="rating" class="form-label">Rating</label>
-            <select class="form-select" id="rating" name="rating" required>
-              <option value="1">★☆☆☆☆</option>
-              <option value="2">★★☆☆☆</option>
-              <option value="3">★★★☆☆</option>
-              <option value="4">★★★★☆</option>
-              <option value="5">★★★★★</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Submit Feedback</button>
-        </form>
+    <!-- Feedback Form -->
+<div class="card form-card shadow">
+  <div class="card-body">
+    <h5 class="card-title text-center">Submit Your Feedback</h5>
+    <form method="POST" action="/">
+      <div class="mb-3">
+        <label for="name" class="form-label">Your Name</label>
+        <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Jane Doe" required>
       </div>
-    </div>
+      <div class="mb-3">
+        <label for="feedback_text" class="form-label">Feedback</label>
+        <textarea class="form-control" id="feedback_text" name="feedback_text" placeholder="What's on your mind?" rows="3" required></textarea>
+      </div>
+      <div class="mb-3">
+        <label for="rating" class="form-label">Rating</label>
+        <select class="form-select" id="rating" name="rating" required>
+          <option value="1">★☆☆☆☆</option>
+          <option value="2">★★☆☆☆</option>
+          <option value="3">★★★☆☆</option>
+          <option value="4">★★★★☆</option>
+          <option value="5">★★★★★</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Submit Feedback</button>
+
+      <!-- ✅ Success or error messages -->
+      {% if success_message %}
+        <p class="text-success text-center mt-2">{{ success_message }}</p>
+      {% elif error %}
+        <p class="text-danger text-center mt-2">{{ error }}</p>
+      {% endif %}
+    </form>
+  </div>
+</div>
 
     <!-- Two Column Layout -->
     <div class="row">
-      <!-- Submitted Feedback (left) -->
+      <!-- Submitted Feedback -->
       <div class="col-md-6 mb-4">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h5>Submitted Feedback</h5>
@@ -109,6 +118,7 @@
         {% if feedbacks %}
         <div class="feedback-carousel">
           <div class="feedback-track">
+            <!-- Original cards -->
             {% for fb in feedbacks %}
             <div class="card feedback-card shadow 
               {% if classifications and classifications[loop.index0] %}
@@ -126,7 +136,6 @@
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                   <h6 class="card-title">{{ fb['name'] }}</h6>
-                  <!-- Classification Badge -->
                   {% if classifications and classifications[loop.index0] %}
                     {% if classifications[loop.index0].split(': ')[1] == 'Positive' %}
                       <span class="badge bg-success">Positive</span>
@@ -155,6 +164,54 @@
               </div>
             </div>
             {% endfor %}
+
+            <!-- Duplicate cards for seamless scroll -->
+            {% for fb in feedbacks %}
+            <div class="card feedback-card shadow 
+              {% if classifications and classifications[loop.index0] %}
+                {% if classifications[loop.index0].split(': ')[1] == 'Positive' %}positive
+                {% elif classifications[loop.index0].split(': ')[1] == 'Negative' %}negative
+                {% elif classifications[loop.index0].split(': ')[1] == 'Mixed' %}mixed
+                {% else %}neutral
+                {% endif %}
+              {% else %}
+                {% if fb['rating'] >= 4 %}positive
+                {% elif fb['rating'] == 3 %}neutral
+                {% else %}negative
+                {% endif %}
+              {% endif %}">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="card-title">{{ fb['name'] }}</h6>
+                  {% if classifications and classifications[loop.index0] %}
+                    {% if classifications[loop.index0].split(': ')[1] == 'Positive' %}
+                      <span class="badge bg-success">Positive</span>
+                    {% elif classifications[loop.index0].split(': ')[1] == 'Negative' %}
+                      <span class="badge bg-danger">Negative</span>
+                    {% elif classifications[loop.index0].split(': ')[1] == 'Mixed' %}
+                      <span class="badge bg-warning text-dark">Mixed</span>
+                    {% else %}
+                      <span class="badge bg-warning text-dark">Neutral</span>
+                    {% endif %}
+                  {% else %}
+                    {% if fb['rating'] >= 4 %}
+                      <span class="badge bg-success">Positive</span>
+                    {% elif fb['rating'] == 3 %}
+                      <span class="badge bg-warning text-dark">Neutral</span>
+                    {% else %}
+                      <span class="badge bg-danger">Negative</span>
+                    {% endif %}
+                  {% endif %}
+                </div>
+                <p class="card-text mt-2">{{ fb['feedback_text'] }}</p>
+                <div class="stars">
+                  {% for i in range(fb['rating']) %}★{% endfor %}
+                  {% for i in range(5 - fb['rating']) %}☆{% endfor %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+
           </div>
         </div>
         {% else %}
@@ -162,7 +219,7 @@
         {% endif %}
       </div>
 
-      <!-- AI Insights (right) -->
+      <!-- AI Insights -->
       <div class="col-md-6 mb-4">
         <h5>AI-Generated Insights</h5>
         {% if show_feedback and classifications and pain_summary and praise_summary and recommendation %}
