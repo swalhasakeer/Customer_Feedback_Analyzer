@@ -3,15 +3,13 @@ from transformers import pipeline
 import logging
 import re
 
-# ---------------------------
+
 # Logging Setup
-# ---------------------------
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# ---------------------------
 # Load Hugging Face Models
-# ---------------------------
 try:
     sentiment_classifier = pipeline(
         "sentiment-analysis",
@@ -30,9 +28,7 @@ except Exception as e:
     logger.error(f"❌ Failed to load LLM models: {str(e)}")
     sentiment_classifier, summarizer, generator = None, None, None
 
-# ---------------------------
 # Keywords for filtering
-# ---------------------------
 NEGATIVE_KEYWORDS = [
     'slow', 'overpriced', 'issue', 'problem', 'bug', 'crash',
     'expensive', 'difficult', 'limited', 'ads', 'doesn’t',
@@ -44,9 +40,7 @@ POSITIVE_KEYWORDS = [
     'intuitive', 'helpful', 'responsive'
 ]
 
-# ---------------------------
 # Sentiment Classification
-# ---------------------------
 def classify_sentiment(text, rating):
     """
     Classify sentiment based on rating + negative keyword detection.
@@ -65,9 +59,7 @@ def classify_sentiment(text, rating):
     else:
         return "Positive"
 
-# ---------------------------
 # Helper: Sentence Filtering
-# ---------------------------
 def filter_positive_sentences(feedback_list):
     positive_sentences = []
     for text in feedback_list:
@@ -88,9 +80,7 @@ def filter_negative_sentences(feedback_list):
                 negative_sentences.append(s_clean)
     return negative_sentences
 
-# ---------------------------
 # Summarization Functions
-# ---------------------------
 def summarize_praises(feedback_list):
     positive_sentences = filter_positive_sentences(feedback_list)
     if not positive_sentences:
@@ -131,9 +121,7 @@ def summarize_pain_points(feedback_list):
             return text_to_summarize
     return text_to_summarize
 
-# ---------------------------
 # Actionable Recommendation
-# ---------------------------
 def generate_recommendation(all_text, classifications):
     """
     Generate ONE clear recommendation for the product/service team.

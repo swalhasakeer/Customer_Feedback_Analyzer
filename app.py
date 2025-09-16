@@ -16,15 +16,11 @@ from llm_models import (
 app = Flask(__name__)
 api = Api(app)
 
-# ---------------------------
 # Logging
-# ---------------------------
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# ---------------------------
 # Database setup
-# ---------------------------
 DATABASE = os.path.join(os.path.dirname(__file__), "feedback.db")
 
 
@@ -53,9 +49,7 @@ def get_db():
 
 init_db()
 
-# ---------------------------
 # Helper
-# ---------------------------
 def get_default_classifications(feedbacks):
     classifications = []
     for fb in feedbacks:
@@ -64,9 +58,7 @@ def get_default_classifications(feedbacks):
     return classifications
 
 
-# ---------------------------
 # Frontend Routes
-# ---------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
     success_message = None
@@ -175,9 +167,7 @@ def analyze_feedback():
     )
 
 
-# ---------------------------
 # API (Flask-RESTful)
-# ---------------------------
 feedback_parser = reqparse.RequestParser()
 feedback_parser.add_argument("name", type=str, required=True, help="Name is required")
 feedback_parser.add_argument(
